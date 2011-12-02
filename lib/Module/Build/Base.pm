@@ -743,10 +743,11 @@ sub ACTION_config_data {
   }
 
   sub valid_properties_defaults {
+    my($self) = @_;
     my %out;
     for my $class (reverse shift->_mb_classes) {
       @out{ keys %{ $valid_properties{$class} } } = map {
-        $_->()
+        $_->($self)
       } values %{ $valid_properties{$class} };
     }
     return \%out;
@@ -904,7 +905,7 @@ __PACKAGE__->add_property(bundle_inc_preload => []);
 __PACKAGE__->add_property(config_dir => '_build');
 __PACKAGE__->add_property(dynamic_config => 1);
 __PACKAGE__->add_property(include_dirs => []);
-__PACKAGE__->add_property(license => 'unknown');
+__PACKAGE__->add_property(license => sub { shift->_guess_license });
 __PACKAGE__->add_property(metafile => 'META.yml');
 __PACKAGE__->add_property(mymetafile => 'MYMETA.yml');
 __PACKAGE__->add_property(metafile2 => 'META.json');
@@ -1210,6 +1211,24 @@ sub _is_dev_version {
   # the author might be doing something weird so should play along and
   # assume they'll specify all necessary behavior
   return $@ ? 0 : $version_obj->is_alpha;
+}
+
+sub _guess_license {
+  my($self) = @_;
+  my $l = eval {
+      require Software::LicenseUtils;
+      my $docfile = $self->_main_docfile
+        or return;
+      my $fh = IO::File->new($docfile)
+        or return;
+      my $pm_text = do { local $/; <$fh> };
+      my @license = Software::LicenseUtils->guess_license_from_pod($pm_text);
+      use Data::Dumper; print Dumper \@license;
+      @license == 1
+        ? substr($license[0], length('Software::License::'))
+        : undef;
+  };
+  return $l || 'unknown';
 }
 
 sub dist_author   { shift->_pod_parse('author')   }
